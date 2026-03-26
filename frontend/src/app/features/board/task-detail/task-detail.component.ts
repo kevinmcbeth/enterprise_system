@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PriorityBadgeComponent } from '../../../shared/priority-badge/priority-badge.component';
-import { TaskResponse } from '../../../core/api/task.service';
+import { TaskResponse, TaskService } from '../../../core/api/task.service';
 import { CommentService, CommentResponse } from '../../../core/api/comment.service';
 
 @Component({
@@ -21,6 +21,8 @@ import { CommentService, CommentResponse } from '../../../core/api/comment.servi
           <p *ngIf="task.description">{{ task.description }}</p>
           <p *ngIf="task.assigneeName"><strong>Assignee:</strong> {{ task.assigneeName }}</p>
           <p *ngIf="task.dueDate"><strong>Due:</strong> {{ task.dueDate }}</p>
+
+          <button class="delete-btn" (click)="deleteTask()">Delete Task</button>
 
           <h4>Comments</h4>
           <div *ngFor="let c of comments" class="comment">
@@ -44,22 +46,32 @@ import { CommentService, CommentResponse } from '../../../core/api/comment.servi
     .comment { border-top: 1px solid #eee; padding: 8px 0; }
     .add-comment textarea { width: 100%; padding: 8px; box-sizing: border-box; min-height: 60px; }
     .add-comment button { margin-top: 8px; background: #1a73e8; color: white; border: none; padding: 8px 16px; cursor: pointer; }
+    .delete-btn { background: #dc3545; color: white; border: none; padding: 8px 16px; cursor: pointer; border-radius: 4px; margin-top: 12px; }
   `]
 })
 export class TaskDetailComponent implements OnInit {
   @Input() task!: TaskResponse;
   @Input() projectId!: number;
   @Output() close = new EventEmitter<void>();
+  @Output() deleted = new EventEmitter<TaskResponse>();
 
   comments: CommentResponse[] = [];
   newComment = '';
 
-  constructor(private commentService: CommentService) {}
+  constructor(private commentService: CommentService, private taskService: TaskService) {}
 
   ngOnInit() {
     this.commentService.list(this.projectId, this.task.id).subscribe(
       (page: any) => this.comments = page.content
     );
+  }
+
+  deleteTask() {
+    if (confirm('Delete this task?')) {
+      this.taskService.delete(this.projectId, this.task.id).subscribe(() => {
+        this.deleted.emit(this.task);
+      });
+    }
   }
 
   addComment() {

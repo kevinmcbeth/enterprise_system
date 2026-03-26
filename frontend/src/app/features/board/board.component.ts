@@ -36,7 +36,8 @@ import { TaskService, TaskResponse } from '../../core/api/task.service';
     <app-task-detail *ngIf="selectedTask"
       [task]="selectedTask"
       [projectId]="projectId"
-      (close)="selectedTask = null" />
+      (close)="selectedTask = null"
+      (deleted)="onTaskDeleted($event)" />
   `,
   styles: [`
     .board-container { padding: 24px; }
@@ -88,6 +89,14 @@ export class BoardComponent implements OnInit {
       this.tasksByColumn[firstColumn.id].push(task);
       this.newTaskTitle = '';
     });
+  }
+
+  onTaskDeleted(task: TaskResponse) {
+    Object.values(this.tasksByColumn).forEach(tasks => {
+      const idx = tasks.findIndex(t => t.id === task.id);
+      if (idx >= 0) tasks.splice(idx, 1);
+    });
+    this.selectedTask = null;
   }
 
   onDrop(event: CdkDragDrop<TaskResponse[]>, targetColumnId: number) {
