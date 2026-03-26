@@ -12,6 +12,7 @@ import { AuthService } from '../../core/auth/auth.service';
       <div class="nav-links">
         <a routerLink="/projects">Projects</a>
         <a routerLink="/tasks">All Tasks</a>
+        <a routerLink="/users">Users</a>
       </div>
       <button (click)="logout()">Logout</button>
     </nav>

@@ -1,0 +1,1 @@
+import{A as e,Da as s,x as r}from"./chunk-E4SE4IO7.js";var c=(()=>{class t{constructor(i){this.http=i}list(){return this.http.get("/api/users")}listAdmin(){return this.http.get("/api/users/admin")}static{this.\u0275fac=function(n){return new(n||t)(e(s))}}static{this.\u0275prov=r({token:t,factory:t.\u0275fac,providedIn:"root"})}}return t})();export{c as a};
