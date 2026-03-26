@@ -11,11 +11,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.kevinmcbeth.enterprise</groupId>
-    <artifactId>enterprise-system</artifactId>
+    <groupId>com.kevinmcbeth</groupId>
+    <artifactId>enterprise</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>enterprise-system</name>
-    <description>Enterprise System</description>
+    <name>enterprise</name>
+    <description>Enterprise web application</description>
 
     <properties>
         <java.version>21</java.version>
