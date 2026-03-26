@@ -9,12 +9,16 @@ import { AuthService } from '../../core/auth/auth.service';
   imports: [CommonModule, RouterLink],
   template: `
     <nav>
-      <a routerLink="/projects">Projects</a>
+      <div class="nav-links">
+        <a routerLink="/projects">Projects</a>
+        <a routerLink="/tasks">All Tasks</a>
+      </div>
       <button (click)="logout()">Logout</button>
     </nav>
   `,
   styles: [`
     nav { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; background: #1a73e8; color: white; }
+    .nav-links { display: flex; gap: 20px; }
     a { color: white; text-decoration: none; font-weight: 600; }
     button { background: transparent; color: white; border: 1px solid white; padding: 6px 12px; cursor: pointer; }
   `]

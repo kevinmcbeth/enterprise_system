@@ -1,13 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { loginAs } from './helpers/auth';
 
 test.describe('Authentication', () => {
-  test.beforeEach(async ({ page }) => {
-    // Clear any stored tokens
-    await page.goto('/login');
-    await page.evaluate(() => {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-    });
+  test.use({
+    storageState: { cookies: [], origins: [] }
   });
 
   test('should show login page', async ({ page }) => {
@@ -23,10 +19,7 @@ test.describe('Authentication', () => {
   });
 
   test('should login with valid credentials', async ({ page }) => {
-    await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
-    await page.fill('input[name="password"]', 'password');
-    await page.click('button[type="submit"]');
+    await loginAs(page, 'admin@example.com', 'password');
 
     await expect(page).toHaveURL(/\/projects/, { timeout: 10000 });
     await expect(page.locator('h2')).toHaveText('Projects');
@@ -34,11 +27,10 @@ test.describe('Authentication', () => {
 
   test('should show error for invalid credentials', async ({ page }) => {
     await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
-    await page.fill('input[name="password"]', 'wrongpassword');
+    await page.fill('input[name="email"]', "admin@example.com");
+    await page.fill('input[name="password"]', "passord");
     await page.click('button[type="submit"]');
-
-    await expect(page.locator('.error')).toBeVisible();
+    await expect(page.locator('.error')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.error')).toHaveText('Invalid email or password');
   });
 
@@ -51,11 +43,7 @@ test.describe('Authentication', () => {
 
   test('should logout', async ({ page }) => {
     // Login first
-    await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
-    await page.fill('input[name="password"]', 'password');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL(/\/projects/, { timeout: 10000 });
+    await loginAs(page, 'admin@example.com', 'password');
 
     // Logout
     await page.click('button:has-text("Logout")');

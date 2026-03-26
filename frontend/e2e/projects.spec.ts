@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { loginAs } from './helpers/auth';
 
 test.describe('Projects', () => {
   test.beforeEach(async ({ page }) => {
@@ -8,10 +9,7 @@ test.describe('Projects', () => {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
     });
-    await page.goto('/login');
-    await page.fill('input[name="email"]', 'admin@example.com');
-    await page.fill('input[name="password"]', 'password');
-    await page.click('button[type="submit"]');
+    await loginAs(page, 'admin@example.com', 'password');
     await expect(page).toHaveURL(/\/projects/, { timeout: 10000 });
   });
 

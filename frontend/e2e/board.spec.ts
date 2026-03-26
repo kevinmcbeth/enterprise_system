@@ -40,7 +40,7 @@ test.describe('Kanban Board', () => {
 
     // Clean up - delete the task after the test
     await page.locator('app-task-card:has(h4:has-text("My Playwright Test Task"))').first().click();
-    await page.click('button:has-text("Delete")'); // whatever your delete button is
+    await page.click('.delete-btn'); // whatever your delete button is
 });
 
   test('should open task detail modal on click', async ({ page }) => {

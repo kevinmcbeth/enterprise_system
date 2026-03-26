@@ -2,6 +2,22 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+export interface AllTasksResponse {
+  id: number;
+  title: string;
+  description: string;
+  projectId: number;
+  projectName: string;
+  columnId: number;
+  columnName: string;
+  assigneeId: number | null;
+  assigneeName: string | null;
+  priority: string;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TaskResponse {
   id: number;
   title: string;
@@ -35,5 +51,9 @@ export class TaskService {
 
   delete(projectId: number, taskId: number): Observable<void> {
     return this.http.delete<void>(`/api/projects/${projectId}/tasks/${taskId}`);
+  }
+
+  allTasks(): Observable<AllTasksResponse[]> {
+    return this.http.get<AllTasksResponse[]>('/api/tasks');
   }
 }
