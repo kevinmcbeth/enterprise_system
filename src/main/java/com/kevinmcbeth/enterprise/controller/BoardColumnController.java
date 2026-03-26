@@ -1,5 +1,6 @@
 package com.kevinmcbeth.enterprise.controller;
 
+import com.kevinmcbeth.enterprise.dto.column.BoardResponse;
 import com.kevinmcbeth.enterprise.dto.column.CreateColumnRequest;
 import com.kevinmcbeth.enterprise.dto.column.UpdateColumnRequest;
 import com.kevinmcbeth.enterprise.entity.BoardColumn;
@@ -24,6 +25,11 @@ public class BoardColumnController {
                                   JwtTokenProvider jwtTokenProvider) {
         this.boardColumnService = boardColumnService;
         this.jwtTokenProvider = jwtTokenProvider;
+    }
+
+    @GetMapping("/board")
+    public List<BoardResponse> getBoard(@PathVariable Long projectId, HttpServletRequest request) {
+        return boardColumnService.getBoard(projectId, getUserId(request));
     }
 
     @GetMapping

@@ -67,12 +67,11 @@ export class BoardComponent implements OnInit {
   }
 
   loadBoard() {
-    this.columnService.list(this.projectId).subscribe(columns => {
-      this.columns = columns;
-      this.connectedListIds = columns.map(c => 'col-' + c.id);
-      // Initialize empty task arrays - will be populated by board endpoint in Task 17
+    this.columnService.getBoard(this.projectId).subscribe(columns => {
+      this.columns = columns.map(c => ({ id: c.id, projectId: this.projectId, name: c.name, position: c.position }));
+      this.connectedListIds = columns.map((c: any) => 'col-' + c.id);
       this.tasksByColumn = {};
-      columns.forEach(c => this.tasksByColumn[c.id] = []);
+      columns.forEach((c: any) => this.tasksByColumn[c.id] = c.tasks || []);
     });
   }
 

@@ -20,4 +20,8 @@ export class ColumnService {
   create(projectId: number, name: string): Observable<BoardColumnResponse> {
     return this.http.post<BoardColumnResponse>(`/api/projects/${projectId}/columns`, { name });
   }
+
+  getBoard(projectId: number): Observable<any[]> {
+    return this.http.get<any[]>(`/api/projects/${projectId}/columns/board`);
+  }
 }
