@@ -3,3 +3,16 @@
 .logs/
 __pycache__/
 state.json
+
+# Maven
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
