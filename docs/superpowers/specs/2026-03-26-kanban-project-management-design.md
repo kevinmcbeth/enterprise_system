@@ -37,6 +37,8 @@ Small teams (2-10 people) collaborating on projects with kanban-style task track
 | userId | Long | FK -> User |
 | expiresAt | Instant | not null |
 
+Refresh tokens are rotated on use: issuing a new access token invalidates the old refresh token and returns a new one. A scheduled job purges expired tokens daily.
+
 ### Projects & Boards
 
 **Project**
@@ -45,8 +47,8 @@ Small teams (2-10 people) collaborating on projects with kanban-style task track
 | id | Long | PK, auto-generated |
 | name | String | not null |
 | description | String | nullable |
-| ownerId | Long | FK -> User |
 | createdAt | Instant | not null, immutable |
+| updatedAt | Instant | not null |
 
 **ProjectMember**
 | Field | Type | Constraints |
@@ -55,22 +57,17 @@ Small teams (2-10 people) collaborating on projects with kanban-style task track
 | userId | Long | FK -> User, composite PK |
 | role | Enum | OWNER, MEMBER |
 
-**Board**
-| Field | Type | Constraints |
-|-------|------|-------------|
-| id | Long | PK, auto-generated |
-| projectId | Long | FK -> Project |
-| name | String | not null |
-
-One board per project initially.
+Ownership is determined solely by `ProjectMember.role = OWNER`. There is no separate `ownerId` on Project — this avoids dual-source-of-truth drift.
 
 **BoardColumn**
 | Field | Type | Constraints |
 |-------|------|-------------|
 | id | Long | PK, auto-generated |
-| boardId | Long | FK -> Board |
+| projectId | Long | FK -> Project |
 | name | String | not null |
 | position | Integer | not null (ordering) |
+
+Board is implicit — each project has columns directly. One logical board per project. If multi-board support is needed later, a Board entity can be introduced between Project and BoardColumn.
 
 ### Tasks
 
@@ -83,7 +80,8 @@ One board per project initially.
 | columnId | Long | FK -> BoardColumn |
 | assigneeId | Long | FK -> User, nullable |
 | priority | Enum | P0, P1, P2, P3, P4 |
-| position | Integer | not null (ordering within column) |
+| position | Integer | not null (ordering within column, gapped by 1000) |
+| version | Long | @Version, optimistic locking |
 | dueDate | LocalDate | nullable |
 | createdAt | Instant | not null, immutable |
 | updatedAt | Instant | not null |
@@ -97,7 +95,19 @@ One board per project initially.
 | body | String | not null |
 | createdAt | Instant | not null, immutable |
 
-Moving a task = updating columnId + position. Reordering within a column = updating position.
+### Concurrency Strategy
+
+Task positions use gapped integers (increments of 1000). Moving a task sets its position to the midpoint between its neighbors. When gaps become too small (< 1), rebalance all positions in the column within a transaction.
+
+Tasks have a `version` field with JPA `@Version` for optimistic locking. If a concurrent move conflicts, the backend returns HTTP 409 and the frontend reloads the board state.
+
+### Cascade Delete Rules
+
+- **Delete Project**: cascades to ProjectMember, BoardColumn, Task (and their TaskComments)
+- **Delete BoardColumn**: blocked if column contains tasks (400 Bad Request). "Empty" means zero tasks.
+- **Delete Task**: cascades to TaskComments
+
+Implemented via JPA `CascadeType.ALL` + `orphanRemoval` on parent-child relationships where cascading applies, and explicit validation where deletes are blocked.
 
 ## API Design
 
@@ -105,47 +115,52 @@ Moving a task = updating columnId + position. Reordering within a column = updat
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/auth/signup` | Register (email, password, displayName) |
-| POST | `/api/auth/login` | Returns JWT access + refresh token |
-| POST | `/api/auth/refresh` | Exchange refresh token for new access token |
+| POST | `/api/auth/signup` | Register (email, password, displayName). Duplicate email returns 409. |
+| POST | `/api/auth/login` | Returns JWT access token + refresh token |
+| POST | `/api/auth/refresh` | Rotates refresh token, returns new access + refresh token |
+| POST | `/api/auth/logout` | Invalidates refresh token |
+
+**Token lifetimes**: Access token 15 minutes, refresh token 7 days.
 
 ### Projects (authenticated)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/projects` | List user's projects |
-| POST | `/api/projects` | Create project (auto-creates default board with 3 columns: To Do, In Progress, Done) |
+| GET | `/api/projects` | List user's projects (paginated) |
+| POST | `/api/projects` | Create project (auto-creates 3 columns: To Do, In Progress, Done) |
 | GET | `/api/projects/{id}` | Project details with members |
-| PUT | `/api/projects/{id}` | Update project |
-| DELETE | `/api/projects/{id}` | Delete project (owner only) |
+| PUT | `/api/projects/{id}` | Update project (member) |
+| DELETE | `/api/projects/{id}` | Delete project with cascades (owner only) |
 | POST | `/api/projects/{id}/members` | Invite member by email |
-| DELETE | `/api/projects/{id}/members/{userId}` | Remove member |
+| DELETE | `/api/projects/{id}/members/{userId}` | Remove member (owner only) |
 
-### Boards & Columns (authenticated, project member)
+### Columns (authenticated, project member)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/projects/{projectId}/board` | Board with columns and tasks |
-| POST | `/api/projects/{projectId}/board/columns` | Add column |
-| PUT | `/api/board-columns/{id}` | Rename or reorder column |
-| DELETE | `/api/board-columns/{id}` | Delete column (must be empty) |
+| GET | `/api/projects/{projectId}/columns` | List columns with tasks |
+| POST | `/api/projects/{projectId}/columns` | Add column |
+| PUT | `/api/projects/{projectId}/columns/{id}` | Rename or reorder column |
+| DELETE | `/api/projects/{projectId}/columns/{id}` | Delete column (must be empty) |
 
 ### Tasks (authenticated, project member)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/board-columns/{columnId}/tasks` | Create task in column |
-| PUT | `/api/tasks/{id}` | Update task fields |
-| PATCH | `/api/tasks/{id}/move` | Move task (target columnId + position) |
-| DELETE | `/api/tasks/{id}` | Delete task |
-| GET | `/api/tasks/{id}/comments` | List comments |
-| POST | `/api/tasks/{id}/comments` | Add comment |
+| POST | `/api/projects/{projectId}/columns/{columnId}/tasks` | Create task in column |
+| PUT | `/api/projects/{projectId}/tasks/{id}` | Update task fields |
+| PATCH | `/api/projects/{projectId}/tasks/{id}/move` | Move task (target columnId + position). Returns 409 on version conflict. |
+| DELETE | `/api/projects/{projectId}/tasks/{id}` | Delete task with cascading comments |
+| GET | `/api/projects/{projectId}/tasks/{id}/comments` | List comments (paginated) |
+| POST | `/api/projects/{projectId}/tasks/{id}/comments` | Add comment |
+
+All task/column endpoints are nested under `/api/projects/{projectId}/` so authorization can resolve project membership consistently from the path.
 
 ### Authorization Rules
 
 - All endpoints except `/api/auth/**` require valid JWT
-- Project endpoints enforce project membership
-- Delete/settings operations enforce owner role
+- Project endpoints enforce project membership via `projectId` in path
+- Delete project and remove member enforce `ProjectMember.role = OWNER`
 - JWT validation errors return 401
 - Permission errors return 403
 
@@ -154,18 +169,21 @@ Moving a task = updating columnId + position. Reordering within a column = updat
 ### Module Structure
 
 - **AuthModule** — login/signup pages, JWT interceptor, auth guard
-- **ProjectModule** — project list, project creation, member management
-- **BoardModule** — kanban board view, drag-and-drop (Angular CDK DragDrop)
+- **ProjectModule** — project list, project creation, settings/member management
+- **BoardModule** — kanban board view, drag-and-drop (Angular CDK DragDrop), task detail modal
 - **SharedModule** — navbar, avatar, priority badges
 
 ### Routes
 
 | Path | View |
 |------|------|
+| `/` | Redirect to `/projects` (or `/login` if unauthenticated) |
 | `/login` | Login page |
 | `/signup` | Signup page |
 | `/projects` | Project list dashboard |
 | `/projects/{id}/board` | Kanban board (main screen) |
+| `/projects/{id}/settings` | Project settings and member management |
+| `**` | 404 not found page |
 
 ### Kanban Board Behavior
 
@@ -173,7 +191,8 @@ Moving a task = updating columnId + position. Reordering within a column = updat
 - Tasks as cards within each column
 - Drag-and-drop cards between columns and reorder within columns (Angular CDK DragDrop)
 - Card displays: title, assignee avatar, priority badge, due date
-- Click card opens detail panel/modal for editing and comments
+- Click card opens detail modal overlay (stays on board route) for editing and comments
+- On 409 conflict from a move, reload board state and show brief notification
 
 ### Dev Workflow
 
@@ -185,7 +204,9 @@ Moving a task = updating columnId + position. Reordering within a column = updat
 
 - Global `@RestControllerAdvice` exception handler
 - Consistent error response: `{ status, message, errors[] }`
-- Custom exceptions: `ResourceNotFoundException`, `AccessDeniedException`, `BadRequestException`
+- Custom exceptions: `ResourceNotFoundException`, `AccessDeniedException`, `BadRequestException`, `ConflictException`
+- Duplicate email on signup returns 409 with user-friendly message
+- Optimistic lock failure on task move returns 409
 
 ## Testing
 
@@ -200,3 +221,10 @@ Moving a task = updating columnId + position. Reordering within a column = updat
 | dev | PostgreSQL | update | application-dev.properties |
 | test | H2 in-memory | create-drop | inline |
 | prod | PostgreSQL | validate | environment variables |
+
+## Known Limitations & Future Enhancements
+
+- **No real-time updates**: Board does not auto-refresh when other users make changes. WebSocket/SSE can be added later.
+- **No cross-project task views**: No "my tasks" dashboard across all projects. Can be added as a read-only aggregation endpoint.
+- **No audit trail**: Task moves and assignment changes are not logged. A TaskActivity table can be added later.
+- **Hard deletes only**: No soft delete / recoverability. Can be added with a `deletedAt` timestamp if needed.
